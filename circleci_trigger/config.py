@@ -1,40 +1,38 @@
 import os
 import yaml
 
-CONFIG_PATH = os.path.expanduser("~/.circleci-trigger/config.yml")
+# FIX: CONFIG_DIR **must** be defined before save_config()
+CONFIG_DIR = os.path.expanduser("~/.circleci-trigger")
+CONFIG_PATH = os.path.join(CONFIG_DIR, "config.yml")
 
 DEFAULT_CONFIG = {
     "circleci_token_env_var": "CIRCLECI_TOKEN",
-    "org": None,
-    "vcs": None,
-    "iac_repo": None,
-    "k8s_repo": None,
+    "org": "",
+    "vcs": "",
+    "iac_repo": "",
+    "k8s_repo": "",
 }
+
 
 def load_config():
     if not os.path.exists(CONFIG_PATH):
         raise FileNotFoundError(
-            f"Config file not found: {CONFIG_PATH}\n"
-            "Please create it with required values."
+            f"❌ Config not found: {CONFIG_PATH}\n"
+            "Run: circleci-trigger init"
         )
 
     with open(CONFIG_PATH, "r") as f:
         cfg = yaml.safe_load(f) or {}
 
-    # merge with defaults
     final = DEFAULT_CONFIG.copy()
     final.update(cfg)
-
-    # Validate required fields
-    required = ["org", "vcs", "iac_repo", "k8s_repo"]
-    missing = [k for k in required if not final.get(k)]
-    if missing:
-        raise ValueError(f"Missing required config keys: {missing}")
-
     return final
 
+
 def save_config(values: dict):
+    # FIX: ensure CONFIG_DIR *exists*
     os.makedirs(CONFIG_DIR, exist_ok=True)
+
     with open(CONFIG_PATH, "w") as f:
         yaml.safe_dump(values, f)
 
