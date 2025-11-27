@@ -14,7 +14,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GH_TOKEN }}
+          token: ${{ secrets.GH_TOKEN }}   # 👈 IMPORTANT
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -30,6 +30,8 @@ jobs:
 
       - name: Upload assets to GitHub Release
         uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}  # 👈 REQUIRED
         with:
           files: |
             dist/*.tar.gz
