@@ -38,3 +38,4 @@ try:
     tap_repo.update_file("Formula/circleci-trigger.rb","Update formula",formula,existing.sha)
 except:
     tap_repo.create_file("Formula/circleci-trigger.rb","Add formula",formula)
+
