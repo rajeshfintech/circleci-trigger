@@ -33,3 +33,9 @@ def load_config():
 
     return final
 
+def save_config(values: dict):
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    with open(CONFIG_PATH, "w") as f:
+        yaml.safe_dump(values, f)
+
+    return CONFIG_PATH
