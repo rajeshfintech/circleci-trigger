@@ -7,39 +7,43 @@ on:
 
 jobs:
   build-release:
-    name: Build & Release
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GH_TOKEN }}   # 👈 IMPORTANT
+          token: ${{ secrets.GH_TOKEN }}
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Extract version
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install build tools
+      - run: pip install build requests PyGithub ruamel.yaml pyyaml
+
+      - name: Bump version
         run: |
-          python3 -m pip install --upgrade build requests PyGithub ruamel.yaml
+          python3 scripts/bump_version.py
 
-      - name: Build source tarball
-        run: python3 -m build
+      - name: Build tarball
+        run: |
+          export PACKAGE_VERSION=${{ steps.version.outputs.VERSION }}
+          python3 -m build
 
-      - name: Upload assets to GitHub Release
+      - name: Upload release
         uses: softprops/action-gh-release@v2
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}  # 👈 REQUIRED
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         with:
-          files: |
-            dist/*.tar.gz
+          tag_name: v${{ steps.version.outputs.VERSION }}
+          files: dist/*.tar.gz
 
       - name: Update Homebrew Tap
         env:
-          HOMEBREW_TAP_REPO: "rajeshfintech/homebrew"
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: |
-          python3 scripts/update-homebrew.py
-
+          VERSION_FROM_GITHUB: ${{ steps.version.outputs.VERSION }}
+          HOMEBREW_TAP_REPO: "rajeshfintech/homebrew"
+        run: python3 scripts/update-homebrew.py
