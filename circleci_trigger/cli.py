@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse, sys, os, requests
-from .config import CIRCLECI_TOKEN_ENV_VAR, ORG, VCS, IAC_REPO, K8S_REPO
+from .config import load_config, save_config
+
 
 def run_init():
     print("🔧 CircleCI Trigger Initialization Wizard\n")
