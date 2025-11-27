@@ -22,7 +22,7 @@ with open(f"dist/{tarball}", "rb") as f:
 sha = sha256_hash.hexdigest()
 print(f"🔐 SHA256: {sha}")
 
-formula = f\"\"\"class CircleciTrigger < Formula
+formula = f"""class CircleciTrigger < Formula
   include Language::Python::Virtualenv
 
   desc "CircleCI trigger CLI"
@@ -41,7 +41,7 @@ formula = f\"\"\"class CircleciTrigger < Formula
     system "#{{bin}}/circleci-trigger", "--help"
   end
 end
-\"\"\"
+"""
 
 # Push to tap repo
 g = Github(os.environ["GH_TOKEN"])
