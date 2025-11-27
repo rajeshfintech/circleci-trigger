@@ -39,3 +39,4 @@ def save_config(values: dict):
         yaml.safe_dump(values, f)
 
     return CONFIG_PATH
+
