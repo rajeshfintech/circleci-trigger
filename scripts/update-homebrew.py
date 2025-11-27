@@ -1,48 +1,100 @@
-import os, hashlib
+import os
+import hashlib
+import requests
 from github import Github
 
-version = os.environ["VERSION_FROM_GITHUB"]
-repo = "rajeshfintech/circleci-trigger"
+PACKAGE = "circleci-trigger"
+REPO = "rajeshfintech/circleci-trigger"
+TAP_REPO = os.environ["HOMEBREW_TAP_REPO"]
+VERSION = os.environ["VERSION_FROM_GITHUB"]
 
-# Auto-detect source tarball
-dist_files = [f for f in os.listdir("dist") if f.endswith(".tar.gz")]
+DEPENDENCIES = [
+    "PyYAML",
+    "requests",
+    "urllib3",
+    "charset-normalizer",
+    "idna",
+    "certifi"
+]
 
-if not dist_files:
-    raise SystemExit("❌ ERROR: No .tar.gz file found in dist/. Build likely failed.")
 
-tarball = dist_files[0]
-print(f"📦 Detected source tarball: {tarball}")
+def get_pypi_sdist_info(package):
+    """Fetch version, URL & SHA256 for a package's sdist tarball."""
+    url = f"https://pypi.org/pypi/{package}/json"
+    r = requests.get(url)
+    if r.status_code != 200:
+        raise SystemExit(f"❌ Failed to fetch PyPI metadata for {package}")
 
-download_url = f"https://github.com/{repo}/releases/download/v{version}/{tarball}"
+    data = r.json()
+    version = data["info"]["version"]
 
-# Compute sha256
-sha256_hash = hashlib.sha256()
-with open(f"dist/{tarball}", "rb") as f:
-    sha256_hash.update(f.read())
-sha = sha256_hash.hexdigest()
-print(f"🔐 SHA256: {sha}")
+    # Find sdist (source tarball)
+    sdist = next(
+        (x for x in data["urls"] if x["packagetype"] == "sdist"),
+        None
+    )
 
-formula = f"""class CircleciTrigger < Formula
+    if not sdist:
+        raise SystemExit(f"❌ No sdist found for {package}")
+
+    return {
+        "name": package,
+        "version": version,
+        "url": sdist["url"],
+        "sha256": sdist["digests"]["sha256"],
+    }
+
+
+def generate_resource_block(info):
+    """Generate a Homebrew resource block."""
+    return f"""
+  resource "{info['name']}" do
+    url "{info['url']}"
+    sha256 "{info['sha256']}"
+  end
+"""
+
+
+def main():
+    print("📦 Building Homebrew formula dynamically...")
+
+    # Detect tarball built from your package
+    dist_files = [f for f in os.listdir("dist") if f.endswith(".tar.gz")]
+    if not dist_files:
+        raise SystemExit("❌ ERROR: No tar.gz file found in dist/")
+    tarball = dist_files[0]
+    print(f"🔍 Using tarball: {tarball}")
+
+    # Compute SHA256 of your package tarball
+    sha256_hash = hashlib.sha256()
+    with open(f"dist/{tarball}", "rb") as f:
+        sha256_hash.update(f.read())
+    tarball_sha = sha256_hash.hexdigest()
+
+    download_url = (
+        f"https://github.com/{REPO}/releases/download/v{VERSION}/{tarball}"
+    )
+
+    # Resolve dependencies
+    print("🔍 Resolving dependencies from PyPI...")
+    resources = ""
+    for dep in DEPENDENCIES:
+        info = get_pypi_sdist_info(dep)
+        print(f"  ✓ {dep} {info['version']}")
+        resources += generate_resource_block(info)
+
+    # Construct Homebrew formula
+    formula = f"""class CircleciTrigger < Formula
   include Language::Python::Virtualenv
 
   desc "CircleCI trigger CLI"
-  homepage "https://github.com/{repo}"
+  homepage "https://github.com/{REPO}"
   url "{download_url}"
-  sha256 "{sha}"
+  sha256 "{tarball_sha}"
   license "MIT"
 
   depends_on "python@3.12"
-
-  resource "PyYAML" do
-    url "https://files.pythonhosted.org/packages/54/ed/79a089b6be93607fa5cdaedf301d7dfb23af5f25c398d5ead2525b063e17/pyyaml-6.0.2.tar.gz"
-    sha256 "d584d9ec91ad65861cc08d42e834324ef890a082e591037abe114850ff7bbc3e"
-  end
-
-  resource "requests" do
-    url "https://files.pythonhosted.org/packages/63/70/2bf7780ad2d390a8d301ad0b550f1581eadbd9a20f896afe06353c2a2913/requests-2.32.3.tar.gz"
-    sha256 "55365417734eb18255590a9ff9eb97e9e1da868d4ccd6402399eaf68af20a760"
-  end
-
+{resources}
   def install
     virtualenv_install_with_resources
   end
@@ -53,22 +105,29 @@ formula = f"""class CircleciTrigger < Formula
 end
 """
 
-# Push to tap repo
-g = Github(os.environ["GH_TOKEN"])
-tap_repo = g.get_repo(os.environ["HOMEBREW_TAP_REPO"])
+    print("📝 Updating tap repo:", TAP_REPO)
 
-try:
-    existing = tap_repo.get_contents("Formula/circleci-trigger.rb")
-    tap_repo.update_file(
-        "Formula/circleci-trigger.rb",
-        f"Update formula to v{version}",
-        formula,
-        existing.sha
-    )
-except:
-    tap_repo.create_file(
-        "Formula/circleci-trigger.rb",
-        f"Create formula for v{version}",
-        formula
-    )
+    gh = Github(os.environ["GH_TOKEN"])
+    tap = gh.get_repo(TAP_REPO)
+
+    try:
+        existing = tap.get_contents("Formula/circleci-trigger.rb")
+        tap.update_file(
+            "Formula/circleci-trigger.rb",
+            f"Update to v{VERSION}",
+            formula,
+            existing.sha
+        )
+        print("✅ Updated existing formula.")
+    except Exception:
+        tap.create_file(
+            "Formula/circleci-trigger.rb",
+            f"Create formula v{VERSION}",
+            formula
+        )
+        print("✅ Created new formula.")
+
+
+if __name__ == "__main__":
+    main()
 
