@@ -1,40 +1,19 @@
-import os
-import hashlib
-import requests
+import os, hashlib
 from github import Github
 
-# Repo config
-TAP_REPO = os.environ["HOMEBREW_TAP_REPO"]
-GH_TOKEN = os.environ["GH_TOKEN"]
-
-# Find tarball
-dist_files = [f for f in os.listdir("dist") if f.endswith(".tar.gz")]
-if not dist_files:
-    raise SystemExit("No files found in dist/")
-
-tarball = dist_files[0]
-version = tarball.split("-")[-1].replace(".tar.gz", "")
-
-# Compute SHA256
-sha256_hash = hashlib.sha256()
-with open(f"dist/{tarball}", "rb") as f:
-    sha256_hash.update(f.read())
-sha = sha256_hash.hexdigest()
-
-print(f"Found tarball: {tarball}")
-print(f"Version: {version}")
-print(f"SHA256: {sha}")
-
-# Construct tarball URL
-repo = os.getenv("GITHUB_REPOSITORY")
+version = os.environ["VERSION_FROM_GITHUB"]
+repo = "rajeshfintech/circleci-trigger"
+tarball = f"circleci-trigger-{version}.tar.gz"
 download_url = f"https://github.com/{repo}/releases/download/v{version}/{tarball}"
 
-# Create/update formula
-formula_content = f"""\
-class CircleciTrigger < Formula
+sha256_hash = hashlib.sha256()
+with open(f"dist/{tarball}", "rb") as f: sha256_hash.update(f.read())
+sha = sha256_hash.hexdigest()
+
+formula = f"""class CircleciTrigger < Formula
   include Language::Python::Virtualenv
 
-  desc "CLI to trigger CircleCI pipelines for n1-iac and n1-k8s"
+  desc "CircleCI trigger CLI"
   homepage "https://github.com/{repo}"
   url "{download_url}"
   sha256 "{sha}"
@@ -47,34 +26,15 @@ class CircleciTrigger < Formula
   end
 
   test do
-    system "{{bin}}/circleci-trigger", "--help"
+    system "#{{bin}}/circleci-trigger", "--help"
   end
 end
 """
 
-# Push to tap repo
-g = Github(GH_TOKEN)
-tap_repo = g.get_repo(TAP_REPO)
-
-formula_path = "Formula/circleci-trigger.rb"
-
+g = Github(os.environ["GH_TOKEN"])
+tap_repo = g.get_repo(os.environ["HOMEBREW_TAP_REPO"])
 try:
-    existing = tap_repo.get_contents(formula_path)
-    tap_repo.update_file(
-        formula_path,
-        f"Update circleci-trigger to {version}",
-        formula_content,
-        existing.sha,
-        branch="main",
-    )
-    print("Updated existing formula")
-
-except Exception:
-    tap_repo.create_file(
-        formula_path,
-        f"Create circleci-trigger formula {version}",
-        formula_content,
-        branch="main",
-    )
-    print("Created new formula")
-
+    existing = tap_repo.get_contents("Formula/circleci-trigger.rb")
+    tap_repo.update_file("Formula/circleci-trigger.rb","Update formula",formula,existing.sha)
+except:
+    tap_repo.create_file("Formula/circleci-trigger.rb","Add formula",formula)
